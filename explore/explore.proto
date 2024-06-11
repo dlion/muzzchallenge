@@ -1,0 +1,39 @@
+syntax = "proto3";
+option go_package="github.com/dlion/muzzchallenge/explore";
+
+package explore;
+
+service ExploreService {
+    rpc LikedYou(LikedYouRequest) returns (LikedYouResponse);
+    rpc PutSwipe(PutSwipeRequest) returns (PutSwipeResponse);
+}
+enum Gender {
+    GENDER_MALE = 0;
+    GENDER_FEMALE = 1;
+}
+enum LikedYou {
+    LIKED_YOU_NEW = 0;
+    LIKED_YOU_SWIPED = 1;
+}
+message ExploreProfile {
+    uint32 timestamp = 1;
+    uint32 marriage_profile_id = 2;
+}
+message LikedYouRequest {
+    Gender gender = 1;
+    uint32 limit = 2;
+    LikedYou filter = 3;
+    uint32 marriage_profile_id = 4;
+}
+message LikedYouResponse {
+    repeated ExploreProfile profiles = 1;
+}
+message PutSwipeRequest {
+    uint32 actor_marriage_profile_id = 1;
+    uint32 recipient_marriage_profile_id = 2;
+    Gender actor_gender = 3;
+    uint32 timestamp = 4;
+    bool like = 5; // True if the actor liked on the recipient, false if they have passed
+}
+
+message PutSwipeResponse {}
