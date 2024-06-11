@@ -89,14 +89,15 @@ func addDataToTable(client *dynamodb.Client, tablename, val string) error {
 	return err
 }
 
-func queryItem(t *testing.T, client *dynamodb.Client, tableName, actorId, recipientId string) (map[string]types.AttributeValue, error) {
+func queryItem(t *testing.T, client *dynamodb.Client, tableName, actorId, recipientId, timestamp string) (map[string]types.AttributeValue, error) {
 	t.Helper()
 
 	output, err := client.GetItem(context.Background(), &dynamodb.GetItemInput{
 		TableName: aws.String(tableName),
 		Key: map[string]types.AttributeValue{
-			"actor_marriage_profile_id":     &types.AttributeValueMemberN{Value: actorId},
-			"recipient_marriage_profile_id": &types.AttributeValueMemberN{Value: recipientId},
+			"pk_swipe": &types.AttributeValueMemberS{
+				Value: fmt.Sprintf("%s-%s-%s", actorId, recipientId, timestamp),
+			},
 		},
 	})
 
