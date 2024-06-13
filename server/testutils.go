@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/dlion/muzzchallenge/explore"
 	"gotest.tools/v3/assert"
 )
 
@@ -75,14 +76,24 @@ func createTableFromFile(client *dynamodb.Client, tableDefinitionFile string) er
 	return err
 }
 
-func addDataToTable(client *dynamodb.Client, tablename, val string) error {
+func addSwipeToTable(
+	client *dynamodb.Client,
+	tablename,
+	timestamp,
+	actorId,
+	recipientId string,
+	gender explore.Gender,
+	like bool) error {
 
 	_, err := client.PutItem(context.Background(), &dynamodb.PutItemInput{
 		TableName: aws.String(tablename),
 		Item: map[string]types.AttributeValue{
-			"actor_marriage_profile_id":     &types.AttributeValueMemberN{Value: "1"},
-			"recipient_marriage_profile_id": &types.AttributeValueMemberN{Value: "2"},
-			"actor_gender":                  &types.AttributeValueMemberS{Value: val},
+			"pk_swipe":                      &types.AttributeValueMemberS{Value: fmt.Sprintf("%s-%s-%s", actorId, recipientId, timestamp)},
+			"actor_marriage_profile_id":     &types.AttributeValueMemberN{Value: actorId},
+			"recipient_marriage_profile_id": &types.AttributeValueMemberN{Value: recipientId},
+			"actor_gender":                  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", gender.Number())},
+			"like":                          &types.AttributeValueMemberBOOL{Value: like},
+			"timestamp":                     &types.AttributeValueMemberN{Value: timestamp},
 		},
 	})
 
