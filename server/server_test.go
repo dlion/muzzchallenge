@@ -25,13 +25,14 @@ func TestServer(t *testing.T) {
 			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
 
 			srv := ExplorerServer{dbClient: client}
-			srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
+			_, err := srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
 				ActorGender:                explore.Gender_GENDER_MALE,
 				Timestamp:                  uint32(time.Now().Unix()),
 				Like:                       true,
 			})
+			assert.NoError(t, err)
 
 			items, err := queryItem(t, client, "Swipe", "1", "2")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
@@ -41,7 +42,7 @@ func TestServer(t *testing.T) {
 			}
 		})
 
-		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and didn't give a like back, the recipient should get a likedBack update", func(t *testing.T) {
+		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and didn't give a like back, the recipient should get a likedBack update, the actor shouldnt have a likedBack false", func(t *testing.T) {
 			dbContainer := createDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
@@ -54,13 +55,14 @@ func TestServer(t *testing.T) {
 			assert.NoError(t, err)
 
 			srv := ExplorerServer{dbClient: client}
-			srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
+			_, err = srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
 				ActorGender:                explore.Gender_GENDER_MALE,
 				Timestamp:                  uint32(time.Now().Unix()),
 				Like:                       true,
 			})
+			assert.NoError(t, err)
 
 			items, err := queryItem(t, client, "Swipe", "1", "2")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
@@ -77,7 +79,7 @@ func TestServer(t *testing.T) {
 			}
 		})
 
-		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and gave a like back, the recipient should get a likedback update", func(t *testing.T) {
+		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and gave a like back, the recipient should get a likedback update, the actor should have a likedBack true", func(t *testing.T) {
 			dbContainer := createDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
@@ -90,13 +92,14 @@ func TestServer(t *testing.T) {
 			assert.NoError(t, err)
 
 			srv := ExplorerServer{dbClient: client}
-			srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
+			_, err = srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
 				ActorGender:                explore.Gender_GENDER_MALE,
 				Timestamp:                  uint32(time.Now().Unix()),
 				Like:                       true,
 			})
+			assert.NoError(t, err)
 
 			items, err := queryItem(t, client, "Swipe", "1", "2")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
@@ -213,6 +216,5 @@ func TestServer(t *testing.T) {
 			assert.Equal(t, timestamp1, fmt.Sprintf("%d", profiles[0].Timestamp))
 			assert.Equal(t, timestamp2, fmt.Sprintf("%d", profiles[1].Timestamp))
 		})
-
 	})
 }

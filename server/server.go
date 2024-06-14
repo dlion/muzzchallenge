@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -23,6 +24,16 @@ type ExplorerServer struct {
 }
 
 func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequest) (*exp.PutSwipeResponse, error) {
+	recipient, err := s.updateRecipient(ctx, request)
+	if err != nil {
+		return &exp.PutSwipeResponse{}, err
+	}
+
+	err = s.addActor(ctx, request, recipient)
+	return &exp.PutSwipeResponse{}, err
+}
+
+func (s *ExplorerServer) updateRecipient(ctx context.Context, request *exp.PutSwipeRequest) (*dynamodb.UpdateItemOutput, error) {
 	recipientOutput, err := s.dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(SWIPE_TABLE),
 		Key: map[string]types.AttributeValue{
@@ -35,8 +46,16 @@ func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequ
 		ConditionExpression: aws.String("attribute_exists(pk_swipe)"),
 		ReturnValues:        types.ReturnValueAllNew,
 	})
+	var conditionalCheckFailed *types.ConditionalCheckFailedException
+	if err != nil && !errors.As(err, &conditionalCheckFailed) {
+		return nil, err
+	}
 
-	s.dbClient.PutItem(ctx, &dynamodb.PutItemInput{
+	return recipientOutput, nil
+}
+
+func (s *ExplorerServer) addActor(ctx context.Context, request *exp.PutSwipeRequest, recipient *dynamodb.UpdateItemOutput) error {
+	_, err := s.dbClient.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(SWIPE_TABLE),
 		Item: map[string]types.AttributeValue{
 			"pk_swipe":                      &types.AttributeValueMemberS{Value: fmt.Sprintf("%d-%d", request.GetActorMarriageProfileId(), request.GetRecipientMarriageProfileId())},
@@ -45,12 +64,18 @@ func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequ
 			"actor_gender":                  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetActorGender().Number())},
 			"timestamp":                     &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetTimestamp())},
 			"like":                          &types.AttributeValueMemberBOOL{Value: request.GetLike()},
-			"likedBack":                     &types.AttributeValueMemberBOOL{Value: recipientOutput != nil && len(recipientOutput.Attributes) > 0 && recipientOutput.Attributes["like"] != nil && recipientOutput.Attributes["like"].(*types.AttributeValueMemberBOOL).Value},
+			"likedBack":                     &types.AttributeValueMemberBOOL{Value: getLikedBackFromRecipient(recipient)},
 		},
 		ConditionExpression: aws.String("attribute_not_exists(pk_swipe)"),
 	})
+	return err
+}
 
-	return &exp.PutSwipeResponse{}, err
+func getLikedBackFromRecipient(recipient *dynamodb.UpdateItemOutput) bool {
+	return recipient != nil &&
+		len(recipient.Attributes) > 0 &&
+		recipient.Attributes["like"] != nil &&
+		recipient.Attributes["like"].(*types.AttributeValueMemberBOOL).Value
 }
 
 func (s *ExplorerServer) LikedYou(ctx context.Context, request *exp.LikedYouRequest) (*exp.LikedYouResponse, error) {
@@ -87,9 +112,14 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 	}
 
 	var profiles []*exp.ExploreProfile
-	for _, v := range output.Items {
-		timestamp, _ := strconv.ParseUint(v["timestamp"].(*types.AttributeValueMemberN).Value, 10, 32)
-		actorMarriageProfileID, _ := strconv.ParseUint(v["actor_marriage_profile_id"].(*types.AttributeValueMemberN).Value, 10, 32)
+	limit := len(output.Items)
+	if request.Limit > 0 && int(request.Limit) < limit {
+		limit = int(request.Limit)
+	}
+
+	for i := 0; i < limit; i++ {
+		timestamp, _ := strconv.ParseUint(output.Items[i]["timestamp"].(*types.AttributeValueMemberN).Value, 10, 32)
+		actorMarriageProfileID, _ := strconv.ParseUint(output.Items[i]["actor_marriage_profile_id"].(*types.AttributeValueMemberN).Value, 10, 32)
 
 		profiles = append(profiles, &exp.ExploreProfile{
 			Timestamp:         uint32(timestamp),
@@ -100,10 +130,6 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 	sort.Slice(profiles, func(i, j int) bool {
 		return profiles[i].Timestamp > profiles[j].Timestamp
 	})
-
-	if request.Limit > 0 && len(profiles) > int(request.Limit) {
-		profiles = profiles[:request.Limit]
-	}
 
 	return profiles, nil
 }
