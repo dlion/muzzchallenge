@@ -83,31 +83,33 @@ func addSwipeToTable(
 	actorId,
 	recipientId string,
 	gender explore.Gender,
-	like bool) error {
+	like bool,
+	likedBack bool) error {
 
 	_, err := client.PutItem(context.Background(), &dynamodb.PutItemInput{
 		TableName: aws.String(tablename),
 		Item: map[string]types.AttributeValue{
-			"pk_swipe":                      &types.AttributeValueMemberS{Value: fmt.Sprintf("%s-%s-%s", actorId, recipientId, timestamp)},
+			"pk_swipe":                      &types.AttributeValueMemberS{Value: fmt.Sprintf("%s-%s", actorId, recipientId)},
 			"actor_marriage_profile_id":     &types.AttributeValueMemberN{Value: actorId},
 			"recipient_marriage_profile_id": &types.AttributeValueMemberN{Value: recipientId},
 			"actor_gender":                  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", gender.Number())},
 			"like":                          &types.AttributeValueMemberBOOL{Value: like},
 			"timestamp":                     &types.AttributeValueMemberN{Value: timestamp},
+			"likedBack":                     &types.AttributeValueMemberBOOL{Value: likedBack},
 		},
 	})
 
 	return err
 }
 
-func queryItem(t *testing.T, client *dynamodb.Client, tableName, actorId, recipientId, timestamp string) (map[string]types.AttributeValue, error) {
+func queryItem(t *testing.T, client *dynamodb.Client, tableName, actorId, recipientId string) (map[string]types.AttributeValue, error) {
 	t.Helper()
 
 	output, err := client.GetItem(context.Background(), &dynamodb.GetItemInput{
 		TableName: aws.String(tableName),
 		Key: map[string]types.AttributeValue{
 			"pk_swipe": &types.AttributeValueMemberS{
-				Value: fmt.Sprintf("%s-%s-%s", actorId, recipientId, timestamp),
+				Value: fmt.Sprintf("%s-%s", actorId, recipientId),
 			},
 		},
 	})

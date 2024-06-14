@@ -10,32 +10,6 @@
       {
         "AttributeName": "pk_swipe",
         "AttributeType": "S"
-      },
-      {
-        "AttributeName": "recipient_marriage_profile_id",
-        "AttributeType": "N"
-      },
-      {
-          "AttributeName": "timestamp",
-          "AttributeType": "N"
-      }
-    ],
-    "GlobalSecondaryIndexes": [
-      {
-        "IndexName": "RecipientTimestampIndex",
-        "KeySchema":[
-          {
-            "AttributeName": "recipient_marriage_profile_id",
-            "KeyType": "HASH"
-          },
-          {
-            "AttributeName": "timestamp",
-            "KeyType": "RANGE"
-          }
-        ],
-        "Projection": {
-          "ProjectionType": "ALL"
-        }
       }
     ],
     "BillingMode": "PAY_PER_REQUEST"

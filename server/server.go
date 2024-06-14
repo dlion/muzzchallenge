@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/dlion/muzzchallenge/explore"
 	exp "github.com/dlion/muzzchallenge/explore"
 )
 
@@ -21,15 +23,29 @@ type ExplorerServer struct {
 }
 
 func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequest) (*exp.PutSwipeResponse, error) {
-	_, err := s.dbClient.PutItem(ctx, &dynamodb.PutItemInput{
+	recipientOutput, err := s.dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(SWIPE_TABLE),
+		Key: map[string]types.AttributeValue{
+			"pk_swipe": &types.AttributeValueMemberS{Value: fmt.Sprintf("%d-%d", request.GetRecipientMarriageProfileId(), request.GetActorMarriageProfileId())},
+		},
+		UpdateExpression: aws.String("SET likedBack = :likedBack"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":likedBack": &types.AttributeValueMemberBOOL{Value: request.GetLike()},
+		},
+		ConditionExpression: aws.String("attribute_exists(pk_swipe)"),
+		ReturnValues:        types.ReturnValueAllNew,
+	})
+
+	s.dbClient.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(SWIPE_TABLE),
 		Item: map[string]types.AttributeValue{
-			"pk_swipe":                      &types.AttributeValueMemberS{Value: fmt.Sprintf("%d-%d-%d", request.GetActorMarriageProfileId(), request.GetRecipientMarriageProfileId(), request.GetTimestamp())},
+			"pk_swipe":                      &types.AttributeValueMemberS{Value: fmt.Sprintf("%d-%d", request.GetActorMarriageProfileId(), request.GetRecipientMarriageProfileId())},
 			"actor_marriage_profile_id":     &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetActorMarriageProfileId())},
 			"recipient_marriage_profile_id": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetRecipientMarriageProfileId())},
 			"actor_gender":                  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetActorGender().Number())},
 			"timestamp":                     &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetTimestamp())},
 			"like":                          &types.AttributeValueMemberBOOL{Value: request.GetLike()},
+			"likedBack":                     &types.AttributeValueMemberBOOL{Value: recipientOutput != nil && len(recipientOutput.Attributes) > 0 && recipientOutput.Attributes["like"] != nil && recipientOutput.Attributes["like"].(*types.AttributeValueMemberBOOL).Value},
 		},
 		ConditionExpression: aws.String("attribute_not_exists(pk_swipe)"),
 	})
@@ -38,46 +54,36 @@ func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequ
 }
 
 func (s *ExplorerServer) LikedYou(ctx context.Context, request *exp.LikedYouRequest) (*exp.LikedYouResponse, error) {
-	profiles, err := s.getProfilesWhoLikedRecipient(ctx, request)
+	profiles, err := s.getProfilesWhoLikedTheProfile(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 
-	filteredProfiles, err := s.filterProfilesByLikeBackStatus(ctx, request, profiles)
-	if err != nil {
-		return nil, err
-	}
-
-	return &exp.LikedYouResponse{Profiles: filteredProfiles}, nil
+	return &exp.LikedYouResponse{Profiles: profiles}, nil
 }
 
-func (s *ExplorerServer) getProfilesWhoLikedRecipient(ctx context.Context, request *exp.LikedYouRequest) ([]*exp.ExploreProfile, error) {
-	queryInput := &dynamodb.QueryInput{
-		TableName:              aws.String(SWIPE_TABLE),
-		IndexName:              aws.String("RecipientTimestampIndex"),
-		KeyConditionExpression: aws.String("recipient_marriage_profile_id = :recipientID"),
-		ProjectionExpression:   aws.String("actor_marriage_profile_id, #timestamp"),
-		FilterExpression:       aws.String("#actor_gender = :actor_gender AND #like = :like"),
+func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *exp.LikedYouRequest) ([]*exp.ExploreProfile, error) {
+
+	queryInput := &dynamodb.ScanInput{
+		TableName:            aws.String(SWIPE_TABLE),
+		ProjectionExpression: aws.String("actor_marriage_profile_id, #like, #likedBack, #timestamp"),
+		FilterExpression:     aws.String("#actor_gender = :actor_gender AND #like = :like AND #likedBack = :likedBack"),
 		ExpressionAttributeNames: map[string]string{
 			"#actor_gender": "actor_gender",
 			"#like":         "like",
 			"#timestamp":    "timestamp",
+			"#likedBack":    "likedBack",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":recipientID":  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetMarriageProfileId())},
 			":actor_gender": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.Gender.Number())},
 			":like":         &types.AttributeValueMemberBOOL{Value: true},
+			":likedBack":    &types.AttributeValueMemberBOOL{Value: getFilter(request.GetFilter())},
 		},
-		ScanIndexForward: aws.Bool(false),
 	}
 
-	if request.Limit > 0 {
-		queryInput.Limit = aws.Int32(int32(request.Limit))
-	}
-
-	output, err := s.dbClient.Query(ctx, queryInput)
+	output, err := s.dbClient.Scan(ctx, queryInput)
 	if err != nil {
-		return nil, fmt.Errorf("error querying profiles who liked recipient: %v", err)
+		return nil, fmt.Errorf("error scanning profiles who liked the profile: %v", err)
 	}
 
 	var profiles []*exp.ExploreProfile
@@ -91,39 +97,23 @@ func (s *ExplorerServer) getProfilesWhoLikedRecipient(ctx context.Context, reque
 		})
 	}
 
+	sort.Slice(profiles, func(i, j int) bool {
+		return profiles[i].Timestamp > profiles[j].Timestamp
+	})
+
+	if request.Limit > 0 && len(profiles) > int(request.Limit) {
+		profiles = profiles[:request.Limit]
+	}
+
 	return profiles, nil
 }
 
-func (s *ExplorerServer) filterProfilesByLikeBackStatus(ctx context.Context, request *exp.LikedYouRequest, profiles []*exp.ExploreProfile) ([]*exp.ExploreProfile, error) {
-	var filteredProfiles []*exp.ExploreProfile
-	for _, profile := range profiles {
-		likeBackQueryInput := &dynamodb.QueryInput{
-			TableName:              aws.String(SWIPE_TABLE),
-			KeyConditionExpression: aws.String("pk_swipe = :likeBackKey"),
-			ExpressionAttributeValues: map[string]types.AttributeValue{
-				":likeBackKey": &types.AttributeValueMemberS{Value: fmt.Sprintf("%d-%d-%d", request.GetMarriageProfileId(), profile.MarriageProfileId, profile.Timestamp)},
-			},
-		}
-
-		likeBackOutput, err := s.dbClient.Query(ctx, likeBackQueryInput)
-		if err != nil {
-			return nil, fmt.Errorf("error checking like back status: %v", err)
-		}
-
-		if shouldIncludeProfile(request.Filter, likeBackOutput.Items) {
-			filteredProfiles = append(filteredProfiles, profile)
-		}
-	}
-
-	return filteredProfiles, nil
-}
-
-func shouldIncludeProfile(filter exp.LikedYou, likeBackItems []map[string]types.AttributeValue) bool {
+func getFilter(filter explore.LikedYou) bool {
 	switch filter {
 	case exp.LikedYou_LIKED_YOU_NEW:
-		return len(likeBackItems) == 0 || !likeBackItems[0]["like"].(*types.AttributeValueMemberBOOL).Value
+		return false
 	case exp.LikedYou_LIKED_YOU_SWIPED:
-		return len(likeBackItems) > 0 && likeBackItems[0]["like"].(*types.AttributeValueMemberBOOL).Value
+		return true
 	default:
 		return false
 	}

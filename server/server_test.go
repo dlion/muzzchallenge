@@ -14,7 +14,7 @@ import (
 
 func TestServer(t *testing.T) {
 	t.Run("PutSwipe", func(t *testing.T) {
-		t.Run("Should swipe as an actor against a recipient giving like to it", func(t *testing.T) {
+		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient doesnt exist yet", func(t *testing.T) {
 			dbContainer := createDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
@@ -25,23 +25,23 @@ func TestServer(t *testing.T) {
 			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
 
 			srv := ExplorerServer{dbClient: client}
-			timestamp := time.Now().Unix()
 			srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
 				ActorGender:                explore.Gender_GENDER_MALE,
-				Timestamp:                  uint32(timestamp),
+				Timestamp:                  uint32(time.Now().Unix()),
 				Like:                       true,
 			})
 
-			items, err := queryItem(t, client, "Swipe", "1", "2", fmt.Sprintf("%d", timestamp))
+			items, err := queryItem(t, client, "Swipe", "1", "2")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
 				assert.Equal(t, "0", items["actor_gender"].(*types.AttributeValueMemberN).Value)
 				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
+				assert.Equal(t, false, items["likedBack"].(*types.AttributeValueMemberBOOL).Value)
 			}
 		})
 
-		t.Run("Should be idempotent", func(t *testing.T) {
+		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and didn't give a like back, the recipient should get a likedBack update", func(t *testing.T) {
 			dbContainer := createDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
@@ -50,35 +50,72 @@ func TestServer(t *testing.T) {
 			}()
 			client := createDynamoDBClient(t, dbContainer)
 			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
+			err := addSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, false, false)
+			assert.NoError(t, err)
 
 			srv := ExplorerServer{dbClient: client}
-			timestamp := time.Now().Unix()
 			srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
 				ActorGender:                explore.Gender_GENDER_MALE,
-				Timestamp:                  uint32(timestamp),
+				Timestamp:                  uint32(time.Now().Unix()),
 				Like:                       true,
 			})
 
+			items, err := queryItem(t, client, "Swipe", "1", "2")
+			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
+				assert.Equal(t, "0", items["actor_gender"].(*types.AttributeValueMemberN).Value)
+				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
+				assert.Equal(t, false, items["likedBack"].(*types.AttributeValueMemberBOOL).Value)
+			}
+
+			items, err = queryItem(t, client, "Swipe", "2", "1")
+			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
+				assert.Equal(t, "1", items["actor_gender"].(*types.AttributeValueMemberN).Value)
+				assert.Equal(t, false, items["like"].(*types.AttributeValueMemberBOOL).Value)
+				assert.Equal(t, true, items["likedBack"].(*types.AttributeValueMemberBOOL).Value)
+			}
+		})
+
+		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and gave a like back, the recipient should get a likedback update", func(t *testing.T) {
+			dbContainer := createDynamoDBContainer(t)
+			defer func() {
+				if err := dbContainer.Terminate(context.Background()); err != nil {
+					log.Fatalf("failed to terminate container: %s", err)
+				}
+			}()
+			client := createDynamoDBClient(t, dbContainer)
+			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
+			err := addSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, true, false)
+			assert.NoError(t, err)
+
+			srv := ExplorerServer{dbClient: client}
 			srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
 				ActorGender:                explore.Gender_GENDER_MALE,
-				Timestamp:                  uint32(timestamp),
-				Like:                       false,
+				Timestamp:                  uint32(time.Now().Unix()),
+				Like:                       true,
 			})
 
-			item, err := queryItem(t, client, "Swipe", "1", "2", fmt.Sprintf("%d", timestamp))
-			if assert.NoError(t, err) && assert.NotEmpty(t, item) {
-				assert.Equal(t, "0", item["actor_gender"].(*types.AttributeValueMemberN).Value)
-				assert.Equal(t, true, item["like"].(*types.AttributeValueMemberBOOL).Value)
+			items, err := queryItem(t, client, "Swipe", "1", "2")
+			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
+				assert.Equal(t, "0", items["actor_gender"].(*types.AttributeValueMemberN).Value)
+				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
+				assert.Equal(t, true, items["likedBack"].(*types.AttributeValueMemberBOOL).Value)
+			}
+
+			items, err = queryItem(t, client, "Swipe", "2", "1")
+			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
+				assert.Equal(t, "1", items["actor_gender"].(*types.AttributeValueMemberN).Value)
+				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
+				assert.Equal(t, true, items["likedBack"].(*types.AttributeValueMemberBOOL).Value)
 			}
 		})
 	})
 
 	t.Run("LikedYou", func(t *testing.T) {
-		t.Run("Should returns all profiles who liked a specific user but that didn't get a like back from that specific user in descending order", func(t *testing.T) {
+		t.Run("Using the filter LikedYou_LIKED_YOU_NEW, it should get back all the people who liked the specific profile, but that didn't get the like back", func(t *testing.T) {
 			dbContainer := createDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
@@ -87,46 +124,31 @@ func TestServer(t *testing.T) {
 			}()
 			client := createDynamoDBClient(t, dbContainer)
 			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
-
-			//Actor 1 likes recipient 2
 			timestamp1 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true)
-			//Actor 3 likes recipient 2
+			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp2 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true)
-			// Actor 4 likes recipient 2
-			timestamp3 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp3, "4", "2", explore.Gender_GENDER_FEMALE, true)
-			// Actor 2 likes recipient 1
+			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp4 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp4, "2", "1", explore.Gender_GENDER_FEMALE, true)
-			// Actor 2 likes recipient 4
+			addSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp5, "2", "4", explore.Gender_GENDER_FEMALE, true)
-			// Actor 2 doesnt like recipient 3
-			timestamp6 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp6, "2", "3", explore.Gender_GENDER_FEMALE, false)
-			// Actor 2 doesnt like recipient 3
-			timestamp7 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp7, "5", "2", explore.Gender_GENDER_FEMALE, true)
+			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
 			server := ExplorerServer{dbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
 				MarriageProfileId: 2,
 				Gender:            explore.Gender_GENDER_FEMALE,
 				Filter:            explore.LikedYou_LIKED_YOU_NEW,
-			})
-			if err != nil {
-				log.Fatalf("error getting back the response %v", err)
-			}
+			}) // Give me all the female profiles who liked 2 but that didn't get a like back from 2
+			assert.NoError(t, err)
 			profiles := response.GetProfiles()
 
-			assert.Equal(t, 2, len(profiles))
-			assert.Equal(t, timestamp2, fmt.Sprintf("%d", profiles[0].Timestamp))
-			assert.Equal(t, timestamp7, fmt.Sprintf("%d", profiles[1].Timestamp))
+			assert.Equal(t, 3, len(profiles))
+			assert.Equal(t, timestamp1, fmt.Sprintf("%d", profiles[0].Timestamp))
+			assert.Equal(t, timestamp2, fmt.Sprintf("%d", profiles[1].Timestamp))
+			assert.Equal(t, timestamp4, fmt.Sprintf("%d", profiles[2].Timestamp))
 		})
 
-		t.Run("Should returns all profiles who liked a specific user and that got a like back from that specific user in descending order", func(t *testing.T) {
+		t.Run("Using the filter LikedYou_LIKED_YOU_SWIPED, it should get back all the people who liked the specific profile and that got the like back", func(t *testing.T) {
 			dbContainer := createDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
@@ -135,36 +157,47 @@ func TestServer(t *testing.T) {
 			}()
 			client := createDynamoDBClient(t, dbContainer)
 			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
-
-			// Actor 1 likes Recipient 2
 			timestamp1 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true)
-			// Actor 3 likes Recipient 2
+			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, true)
 			timestamp2 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true)
-			// Actror 4 likes recipient 2
-			timestamp3 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp3, "4", "2", explore.Gender_GENDER_FEMALE, true)
-			// Actor 2 likes recipient 1
+			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, true)
 			timestamp4 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp4, "2", "1", explore.Gender_GENDER_FEMALE, true)
-			// Actor 2 likes recipient 4
+			addSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp5, "2", "4", explore.Gender_GENDER_FEMALE, true)
-			// Actor 2 didnt like recipient 3
-			timestamp6 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp6, "2", "3", explore.Gender_GENDER_FEMALE, false)
-			// Actor 2 like recipient 5
-			timestamp7 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp7, "2", "5", explore.Gender_GENDER_FEMALE, true)
-			// Actor 5 like recipient 2
-			timestamp8 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp8, "5", "2", explore.Gender_GENDER_FEMALE, true)
+			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
-			// 1 -> 2, 2 -> 1 = match
-			//3 -> 2, 2 -> 3 = NO
-			//4 -> 2, 2 -> 4 = match
-			//2 -> 5, 5 -> 2 = match
+			server := ExplorerServer{dbClient: client}
+			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
+				MarriageProfileId: 2,
+				Gender:            explore.Gender_GENDER_FEMALE,
+				Filter:            explore.LikedYou_LIKED_YOU_SWIPED,
+			})
+			assert.NoError(t, err)
+			profiles := response.GetProfiles()
+
+			assert.Equal(t, 3, len(profiles))
+			assert.Equal(t, timestamp1, fmt.Sprintf("%d", profiles[0].Timestamp))
+			assert.Equal(t, timestamp2, fmt.Sprintf("%d", profiles[1].Timestamp))
+			assert.Equal(t, timestamp5, fmt.Sprintf("%d", profiles[2].Timestamp))
+		})
+
+		t.Run("Using the filter LikedYou_LIKED_YOU_SWIPED, it should get back all the people who liked the specific profile and that got the like back with a limit of 2 people got back", func(t *testing.T) {
+			dbContainer := createDynamoDBContainer(t)
+			defer func() {
+				if err := dbContainer.Terminate(context.Background()); err != nil {
+					log.Fatalf("failed to terminate container: %s", err)
+				}
+			}()
+			client := createDynamoDBClient(t, dbContainer)
+			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
+			timestamp1 := fmt.Sprintf("%d", time.Now().Unix())
+			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, true)
+			timestamp2 := fmt.Sprintf("%d", time.Now().Unix())
+			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, true)
+			timestamp4 := fmt.Sprintf("%d", time.Now().Unix())
+			addSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
+			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
+			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
 			server := ExplorerServer{dbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
@@ -173,14 +206,13 @@ func TestServer(t *testing.T) {
 				Filter:            explore.LikedYou_LIKED_YOU_SWIPED,
 				Limit:             2,
 			})
-			if err != nil {
-				log.Fatalf("error getting back the response %v", err)
-			}
+			assert.NoError(t, err)
 			profiles := response.GetProfiles()
 
 			assert.Equal(t, 2, len(profiles))
 			assert.Equal(t, timestamp1, fmt.Sprintf("%d", profiles[0].Timestamp))
-			assert.Equal(t, timestamp3, fmt.Sprintf("%d", profiles[1].Timestamp))
+			assert.Equal(t, timestamp2, fmt.Sprintf("%d", profiles[1].Timestamp))
 		})
+
 	})
 }
