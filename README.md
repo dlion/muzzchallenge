@@ -12,11 +12,34 @@ The `server/server_test.go` file contains integration tests that use `testcontai
 
 ### Run DynamoDB
 
-1. `docker-compose up`
+
+#### Run on Intel Machine
+
+1. Open the `Dockerfile` file
+2. Comment from line `15` to `18`
+3. Uncomment from line `21` to `24`
+
+#### Run on ARM Machine
+1. Open the `Dockerfile` file
+2. Uncomment from line `15` to `18`
+3. Comment from line `21` to `24`
+
+This project has been developed on an ARM machine so out-of-the-box you should be fine if you are running it on an ARM machine.
+
+* `docker-compose up`
+
+Screenshot:
+
+![docker-compose up](https://i.imgur.com/zp3Aual.png)
+
 
 ### Run the server
 
 1. `go run main.go` (by default it listens to the port `37857`)
+
+Screenshot:
+
+![run the app](https://i.imgur.com/qzT5L7R.png)
 
 ### Parameters
 * `p`: Service Port (Default: `37857`)
