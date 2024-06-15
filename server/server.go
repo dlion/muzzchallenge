@@ -83,15 +83,17 @@ func getLikedBackFromRecipient(recipient *dynamodb.UpdateItemOutput) bool {
 }
 
 func (s *ExplorerServer) LikedYou(ctx context.Context, request *explore.LikedYouRequest) (*explore.LikedYouResponse, error) {
-	profiles, err := s.getProfilesWhoLikedTheProfile(ctx, request)
+	output, err := s.getProfilesWhoLikedTheProfile(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 
+	profiles := getExploreProfilesFromLiked(output, request)
+
 	return &explore.LikedYouResponse{Profiles: profiles}, nil
 }
 
-func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *explore.LikedYouRequest) ([]*explore.ExploreProfile, error) {
+func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *explore.LikedYouRequest) (*dynamodb.ScanOutput, error) {
 
 	queryInput := &dynamodb.ScanInput{
 		TableName:            aws.String(SWIPE_TABLE),
@@ -115,12 +117,13 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 		return nil, fmt.Errorf("error scanning profiles who liked the profile: %v", err)
 	}
 
-	var profiles []*explore.ExploreProfile
-	limit := len(output.Items)
-	if request.Limit > 0 && int(request.Limit) < limit {
-		limit = int(request.Limit)
-	}
+	return output, nil
+}
 
+func getExploreProfilesFromLiked(output *dynamodb.ScanOutput, request *explore.LikedYouRequest) []*explore.ExploreProfile {
+	limit := getLimit(request.Limit, len(output.Items))
+
+	var profiles []*explore.ExploreProfile
 	for i := 0; i < limit; i++ {
 		timestamp, _ := strconv.ParseUint(output.Items[i]["timestamp"].(*types.AttributeValueMemberN).Value, 10, 32)
 		actorMarriageProfileID, _ := strconv.ParseUint(output.Items[i]["actor_marriage_profile_id"].(*types.AttributeValueMemberN).Value, 10, 32)
@@ -135,7 +138,15 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 		return profiles[i].Timestamp > profiles[j].Timestamp
 	})
 
-	return profiles, nil
+	return profiles
+}
+
+func getLimit(requestLimit uint32, maxLimit int) int {
+	if requestLimit > 0 && int(requestLimit) < maxLimit {
+		return int(requestLimit)
+	}
+
+	return maxLimit
 }
 
 func getFilter(filter explore.LikedYou) bool {
