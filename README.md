@@ -12,8 +12,7 @@ The `server/server_test.go` file contains integration tests that use `testcontai
 
 ### Run DynamoDB
 
-1. `cd docker/dynamodb`
-2. `docker-compose up`
+1. `docker-compose up`
 
 ### Run the server
 

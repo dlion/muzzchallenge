@@ -24,7 +24,7 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv
 #     && rm -rf awscliv2.zip aws
 
 # Copy initialization scripts
-COPY init /init
+COPY docker/dynamodb/init /init
 
 # Set entrypoint for container
 ENTRYPOINT ["/bin/sh", "/init/init.sh"]
