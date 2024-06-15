@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/dlion/muzzchallenge/explore"
-	exp "github.com/dlion/muzzchallenge/explore"
 )
 
 const (
@@ -19,21 +18,21 @@ const (
 )
 
 type ExplorerServer struct {
-	exp.UnimplementedExploreServiceServer
+	explore.UnimplementedExploreServiceServer
 	DbClient *dynamodb.Client
 }
 
-func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequest) (*exp.PutSwipeResponse, error) {
+func (s *ExplorerServer) PutSwipe(ctx context.Context, request *explore.PutSwipeRequest) (*explore.PutSwipeResponse, error) {
 	recipient, err := s.updateRecipient(ctx, request)
 	if err != nil {
-		return &exp.PutSwipeResponse{}, err
+		return &explore.PutSwipeResponse{}, err
 	}
 
 	err = s.addActor(ctx, request, recipient)
-	return &exp.PutSwipeResponse{}, err
+	return &explore.PutSwipeResponse{}, err
 }
 
-func (s *ExplorerServer) updateRecipient(ctx context.Context, request *exp.PutSwipeRequest) (*dynamodb.UpdateItemOutput, error) {
+func (s *ExplorerServer) updateRecipient(ctx context.Context, request *explore.PutSwipeRequest) (*dynamodb.UpdateItemOutput, error) {
 	recipientOutput, err := s.DbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(SWIPE_TABLE),
 		Key: map[string]types.AttributeValue{
@@ -54,7 +53,7 @@ func (s *ExplorerServer) updateRecipient(ctx context.Context, request *exp.PutSw
 	return recipientOutput, nil
 }
 
-func (s *ExplorerServer) addActor(ctx context.Context, request *exp.PutSwipeRequest, recipient *dynamodb.UpdateItemOutput) error {
+func (s *ExplorerServer) addActor(ctx context.Context, request *explore.PutSwipeRequest, recipient *dynamodb.UpdateItemOutput) error {
 	_, err := s.DbClient.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(SWIPE_TABLE),
 		Item: map[string]types.AttributeValue{
@@ -83,16 +82,16 @@ func getLikedBackFromRecipient(recipient *dynamodb.UpdateItemOutput) bool {
 		recipient.Attributes["like"].(*types.AttributeValueMemberBOOL).Value
 }
 
-func (s *ExplorerServer) LikedYou(ctx context.Context, request *exp.LikedYouRequest) (*exp.LikedYouResponse, error) {
+func (s *ExplorerServer) LikedYou(ctx context.Context, request *explore.LikedYouRequest) (*explore.LikedYouResponse, error) {
 	profiles, err := s.getProfilesWhoLikedTheProfile(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 
-	return &exp.LikedYouResponse{Profiles: profiles}, nil
+	return &explore.LikedYouResponse{Profiles: profiles}, nil
 }
 
-func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *exp.LikedYouRequest) ([]*exp.ExploreProfile, error) {
+func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *explore.LikedYouRequest) ([]*explore.ExploreProfile, error) {
 
 	queryInput := &dynamodb.ScanInput{
 		TableName:            aws.String(SWIPE_TABLE),
@@ -116,7 +115,7 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 		return nil, fmt.Errorf("error scanning profiles who liked the profile: %v", err)
 	}
 
-	var profiles []*exp.ExploreProfile
+	var profiles []*explore.ExploreProfile
 	limit := len(output.Items)
 	if request.Limit > 0 && int(request.Limit) < limit {
 		limit = int(request.Limit)
@@ -126,7 +125,7 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 		timestamp, _ := strconv.ParseUint(output.Items[i]["timestamp"].(*types.AttributeValueMemberN).Value, 10, 32)
 		actorMarriageProfileID, _ := strconv.ParseUint(output.Items[i]["actor_marriage_profile_id"].(*types.AttributeValueMemberN).Value, 10, 32)
 
-		profiles = append(profiles, &exp.ExploreProfile{
+		profiles = append(profiles, &explore.ExploreProfile{
 			Timestamp:         uint32(timestamp),
 			MarriageProfileId: uint32(actorMarriageProfileID),
 		})
@@ -141,9 +140,9 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 
 func getFilter(filter explore.LikedYou) bool {
 	switch filter {
-	case exp.LikedYou_LIKED_YOU_NEW:
+	case explore.LikedYou_LIKED_YOU_NEW:
 		return false
-	case exp.LikedYou_LIKED_YOU_SWIPED:
+	case explore.LikedYou_LIKED_YOU_SWIPED:
 		return true
 	default:
 		return false

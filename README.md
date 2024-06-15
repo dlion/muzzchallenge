@@ -6,9 +6,9 @@ The `server/server_test.go` file contains integration tests that use `testcontai
 
 > Be sure to have Docker up and running
 
-`go test ./...`
+`go test -v ./...`
 
-## How to run
+## How to run the project
 
 ### Run DynamoDB
 
