@@ -24,7 +24,7 @@ func TestServer(t *testing.T) {
 			client := createDynamoDBClient(t, dbContainer)
 			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
 
-			srv := ExplorerServer{dbClient: client}
+			srv := ExplorerServer{DbClient: client}
 			_, err := srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
@@ -54,7 +54,7 @@ func TestServer(t *testing.T) {
 			err := addSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, false, false)
 			assert.NoError(t, err)
 
-			srv := ExplorerServer{dbClient: client}
+			srv := ExplorerServer{DbClient: client}
 			_, err = srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
@@ -91,7 +91,7 @@ func TestServer(t *testing.T) {
 			err := addSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, true, false)
 			assert.NoError(t, err)
 
-			srv := ExplorerServer{dbClient: client}
+			srv := ExplorerServer{DbClient: client}
 			_, err = srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
 				ActorMarriageProfileId:     1,
 				RecipientMarriageProfileId: 2,
@@ -136,7 +136,7 @@ func TestServer(t *testing.T) {
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
 			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
-			server := ExplorerServer{dbClient: client}
+			server := ExplorerServer{DbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
 				MarriageProfileId: 2,
 				Gender:            explore.Gender_GENDER_FEMALE,
@@ -169,7 +169,7 @@ func TestServer(t *testing.T) {
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
 			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
-			server := ExplorerServer{dbClient: client}
+			server := ExplorerServer{DbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
 				MarriageProfileId: 2,
 				Gender:            explore.Gender_GENDER_FEMALE,
@@ -202,7 +202,7 @@ func TestServer(t *testing.T) {
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
 			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
-			server := ExplorerServer{dbClient: client}
+			server := ExplorerServer{DbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
 				MarriageProfileId: 2,
 				Gender:            explore.Gender_GENDER_FEMALE,

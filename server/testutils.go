@@ -47,7 +47,7 @@ func createDynamoDBClient(t *testing.T, dbContainer *dynamodblocal.DynamodbLocal
 func createDynamoDBTable(t *testing.T, client *dynamodb.Client, tableName, tableDefinitionFilename string) {
 	t.Helper()
 
-	relativePath := filepath.Join("..", "docker", "dynamodb", tableDefinitionFilename)
+	relativePath := filepath.Join("..", "docker", "dynamodb", "init", tableDefinitionFilename)
 	if err := createTableFromFile(client, relativePath); err != nil {
 		log.Fatalf("failed to create table: %v", err)
 	}

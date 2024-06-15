@@ -20,7 +20,7 @@ const (
 
 type ExplorerServer struct {
 	exp.UnimplementedExploreServiceServer
-	dbClient *dynamodb.Client
+	DbClient *dynamodb.Client
 }
 
 func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequest) (*exp.PutSwipeResponse, error) {
@@ -34,7 +34,7 @@ func (s *ExplorerServer) PutSwipe(ctx context.Context, request *exp.PutSwipeRequ
 }
 
 func (s *ExplorerServer) updateRecipient(ctx context.Context, request *exp.PutSwipeRequest) (*dynamodb.UpdateItemOutput, error) {
-	recipientOutput, err := s.dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+	recipientOutput, err := s.DbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(SWIPE_TABLE),
 		Key: map[string]types.AttributeValue{
 			"pk_swipe": &types.AttributeValueMemberS{Value: fmt.Sprintf("%d-%d", request.GetRecipientMarriageProfileId(), request.GetActorMarriageProfileId())},
@@ -55,7 +55,7 @@ func (s *ExplorerServer) updateRecipient(ctx context.Context, request *exp.PutSw
 }
 
 func (s *ExplorerServer) addActor(ctx context.Context, request *exp.PutSwipeRequest, recipient *dynamodb.UpdateItemOutput) error {
-	_, err := s.dbClient.PutItem(ctx, &dynamodb.PutItemInput{
+	_, err := s.DbClient.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(SWIPE_TABLE),
 		Item: map[string]types.AttributeValue{
 			"pk_swipe":                      &types.AttributeValueMemberS{Value: fmt.Sprintf("%d-%d", request.GetActorMarriageProfileId(), request.GetRecipientMarriageProfileId())},
@@ -68,7 +68,12 @@ func (s *ExplorerServer) addActor(ctx context.Context, request *exp.PutSwipeRequ
 		},
 		ConditionExpression: aws.String("attribute_not_exists(pk_swipe)"),
 	})
-	return err
+
+	var conditionalCheckFailed *types.ConditionalCheckFailedException
+	if err != nil && !errors.As(err, &conditionalCheckFailed) {
+		return err
+	}
+	return nil
 }
 
 func getLikedBackFromRecipient(recipient *dynamodb.UpdateItemOutput) bool {
@@ -106,7 +111,7 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 		},
 	}
 
-	output, err := s.dbClient.Scan(ctx, queryInput)
+	output, err := s.DbClient.Scan(ctx, queryInput)
 	if err != nil {
 		return nil, fmt.Errorf("error scanning profiles who liked the profile: %v", err)
 	}
