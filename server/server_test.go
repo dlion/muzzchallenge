@@ -9,20 +9,21 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/dlion/muzzchallenge/explore"
+	"github.com/dlion/muzzchallenge/server/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestServer(t *testing.T) {
 	t.Run("PutSwipe", func(t *testing.T) {
 		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient doesnt exist yet", func(t *testing.T) {
-			dbContainer := createDynamoDBContainer(t)
+			dbContainer := testutils.CreateDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
 					log.Fatalf("failed to terminate container: %s", err)
 				}
 			}()
-			client := createDynamoDBClient(t, dbContainer)
-			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
+			client := testutils.CreateDynamoDBClient(t, dbContainer)
+			testutils.CreateDynamoDBTable(t, client, "Swipe")
 
 			srv := ExplorerServer{DbClient: client}
 			_, err := srv.PutSwipe(context.Background(), &explore.PutSwipeRequest{
@@ -34,7 +35,7 @@ func TestServer(t *testing.T) {
 			})
 			assert.NoError(t, err)
 
-			items, err := queryItem(t, client, "Swipe", "1", "2")
+			items, err := testutils.QueryItem(t, client, "Swipe", "1", "2")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
 				assert.Equal(t, "0", items["actor_gender"].(*types.AttributeValueMemberN).Value)
 				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
@@ -43,15 +44,15 @@ func TestServer(t *testing.T) {
 		})
 
 		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and didn't give a like back, the recipient should get a likedBack update, the actor shouldnt have a likedBack false", func(t *testing.T) {
-			dbContainer := createDynamoDBContainer(t)
+			dbContainer := testutils.CreateDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
 					log.Fatalf("failed to terminate container: %s", err)
 				}
 			}()
-			client := createDynamoDBClient(t, dbContainer)
-			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
-			err := addSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, false, false)
+			client := testutils.CreateDynamoDBClient(t, dbContainer)
+			testutils.CreateDynamoDBTable(t, client, "Swipe")
+			err := testutils.AddSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, false, false)
 			assert.NoError(t, err)
 
 			srv := ExplorerServer{DbClient: client}
@@ -64,14 +65,14 @@ func TestServer(t *testing.T) {
 			})
 			assert.NoError(t, err)
 
-			items, err := queryItem(t, client, "Swipe", "1", "2")
+			items, err := testutils.QueryItem(t, client, "Swipe", "1", "2")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
 				assert.Equal(t, "0", items["actor_gender"].(*types.AttributeValueMemberN).Value)
 				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
 				assert.Equal(t, false, items["likedBack"].(*types.AttributeValueMemberBOOL).Value)
 			}
 
-			items, err = queryItem(t, client, "Swipe", "2", "1")
+			items, err = testutils.QueryItem(t, client, "Swipe", "2", "1")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
 				assert.Equal(t, "1", items["actor_gender"].(*types.AttributeValueMemberN).Value)
 				assert.Equal(t, false, items["like"].(*types.AttributeValueMemberBOOL).Value)
@@ -80,15 +81,15 @@ func TestServer(t *testing.T) {
 		})
 
 		t.Run("Should swipe as an actor against a recipient giving like to it, the recipient exist and gave a like back, the recipient should get a likedback update, the actor should have a likedBack true", func(t *testing.T) {
-			dbContainer := createDynamoDBContainer(t)
+			dbContainer := testutils.CreateDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
 					log.Fatalf("failed to terminate container: %s", err)
 				}
 			}()
-			client := createDynamoDBClient(t, dbContainer)
-			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
-			err := addSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, true, false)
+			client := testutils.CreateDynamoDBClient(t, dbContainer)
+			testutils.CreateDynamoDBTable(t, client, "Swipe")
+			err := testutils.AddSwipeToTable(client, "Swipe", fmt.Sprintf("%d", time.Now().Unix()), "2", "1", explore.Gender_GENDER_FEMALE, true, false)
 			assert.NoError(t, err)
 
 			srv := ExplorerServer{DbClient: client}
@@ -101,14 +102,14 @@ func TestServer(t *testing.T) {
 			})
 			assert.NoError(t, err)
 
-			items, err := queryItem(t, client, "Swipe", "1", "2")
+			items, err := testutils.QueryItem(t, client, "Swipe", "1", "2")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
 				assert.Equal(t, "0", items["actor_gender"].(*types.AttributeValueMemberN).Value)
 				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
 				assert.Equal(t, true, items["likedBack"].(*types.AttributeValueMemberBOOL).Value)
 			}
 
-			items, err = queryItem(t, client, "Swipe", "2", "1")
+			items, err = testutils.QueryItem(t, client, "Swipe", "2", "1")
 			if assert.NoError(t, err) && assert.NotEmpty(t, items) {
 				assert.Equal(t, "1", items["actor_gender"].(*types.AttributeValueMemberN).Value)
 				assert.Equal(t, true, items["like"].(*types.AttributeValueMemberBOOL).Value)
@@ -119,22 +120,22 @@ func TestServer(t *testing.T) {
 
 	t.Run("LikedYou", func(t *testing.T) {
 		t.Run("Using the filter LikedYou_LIKED_YOU_NEW, it should get back all the people who liked the specific profile, but that didn't get the like back", func(t *testing.T) {
-			dbContainer := createDynamoDBContainer(t)
+			dbContainer := testutils.CreateDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
 					log.Fatalf("failed to terminate container: %s", err)
 				}
 			}()
-			client := createDynamoDBClient(t, dbContainer)
-			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
+			client := testutils.CreateDynamoDBClient(t, dbContainer)
+			testutils.CreateDynamoDBTable(t, client, "Swipe")
 			timestamp1 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, false)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp2 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, false)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp4 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
 			server := ExplorerServer{DbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
@@ -152,22 +153,22 @@ func TestServer(t *testing.T) {
 		})
 
 		t.Run("Using the filter LikedYou_LIKED_YOU_SWIPED, it should get back all the people who liked the specific profile and that got the like back", func(t *testing.T) {
-			dbContainer := createDynamoDBContainer(t)
+			dbContainer := testutils.CreateDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
 					log.Fatalf("failed to terminate container: %s", err)
 				}
 			}()
-			client := createDynamoDBClient(t, dbContainer)
-			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
+			client := testutils.CreateDynamoDBClient(t, dbContainer)
+			testutils.CreateDynamoDBTable(t, client, "Swipe")
 			timestamp1 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, true)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, true)
 			timestamp2 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, true)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, true)
 			timestamp4 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
 			server := ExplorerServer{DbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{
@@ -185,22 +186,22 @@ func TestServer(t *testing.T) {
 		})
 
 		t.Run("Using the filter LikedYou_LIKED_YOU_SWIPED, it should get back all the people who liked the specific profile and that got the like back with a limit of 2 people got back", func(t *testing.T) {
-			dbContainer := createDynamoDBContainer(t)
+			dbContainer := testutils.CreateDynamoDBContainer(t)
 			defer func() {
 				if err := dbContainer.Terminate(context.Background()); err != nil {
 					log.Fatalf("failed to terminate container: %s", err)
 				}
 			}()
-			client := createDynamoDBClient(t, dbContainer)
-			createDynamoDBTable(t, client, "Swipe", "swipe_table.json")
+			client := testutils.CreateDynamoDBClient(t, dbContainer)
+			testutils.CreateDynamoDBTable(t, client, "Swipe")
 			timestamp1 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, true)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp1, "1", "2", explore.Gender_GENDER_FEMALE, true, true)
 			timestamp2 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, true)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp2, "3", "2", explore.Gender_GENDER_FEMALE, true, true)
 			timestamp4 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp4, "5", "2", explore.Gender_GENDER_FEMALE, true, false)
 			timestamp5 := fmt.Sprintf("%d", time.Now().Unix())
-			addSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
+			testutils.AddSwipeToTable(client, "Swipe", timestamp5, "4", "2", explore.Gender_GENDER_FEMALE, true, true)
 
 			server := ExplorerServer{DbClient: client}
 			response, err := server.LikedYou(context.Background(), &explore.LikedYouRequest{

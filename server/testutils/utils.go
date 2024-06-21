@@ -1,12 +1,12 @@
-package server
+package testutils
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"testing"
 
 	dynamodblocal "github.com/abhirockzz/dynamodb-local-testcontainers-go"
@@ -17,7 +17,10 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func createDynamoDBContainer(t *testing.T) *dynamodblocal.DynamodbLocalContainer {
+//go:embed swipe_table.json
+var tableDefinitionFile []byte
+
+func CreateDynamoDBContainer(t *testing.T) *dynamodblocal.DynamodbLocalContainer {
 	t.Helper()
 
 	ctx := context.Background()
@@ -33,7 +36,7 @@ func createDynamoDBContainer(t *testing.T) *dynamodblocal.DynamodbLocalContainer
 	return dynamodbLocalContainer
 }
 
-func createDynamoDBClient(t *testing.T, dbContainer *dynamodblocal.DynamodbLocalContainer) *dynamodb.Client {
+func CreateDynamoDBClient(t *testing.T, dbContainer *dynamodblocal.DynamodbLocalContainer) *dynamodb.Client {
 	t.Helper()
 
 	client, err := dbContainer.GetDynamoDBClient(context.Background())
@@ -44,11 +47,10 @@ func createDynamoDBClient(t *testing.T, dbContainer *dynamodblocal.DynamodbLocal
 	return client
 }
 
-func createDynamoDBTable(t *testing.T, client *dynamodb.Client, tableName, tableDefinitionFilename string) {
+func CreateDynamoDBTable(t *testing.T, client *dynamodb.Client, tableName string) {
 	t.Helper()
 
-	relativePath := filepath.Join("..", "docker", "dynamodb", "init", tableDefinitionFilename)
-	if err := createTableFromFile(client, relativePath); err != nil {
+	if err := createTableFromFile(client, tableDefinitionFile); err != nil {
 		log.Fatalf("failed to create table: %v", err)
 	}
 
@@ -61,22 +63,16 @@ func createDynamoDBTable(t *testing.T, client *dynamodb.Client, tableName, table
 	log.Printf("%s Table created successfully\n", tableName)
 }
 
-func createTableFromFile(client *dynamodb.Client, tableDefinitionFile string) error {
-	file, err := os.Open(tableDefinitionFile)
-	if err != nil {
-		return fmt.Errorf("failed to open table definition file: %w", err)
-	}
-	defer file.Close()
-
+func createTableFromFile(client *dynamodb.Client, tableDefinitionFile []byte) error {
 	var createTableInput dynamodb.CreateTableInput
-	if err := json.NewDecoder(file).Decode(&createTableInput); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(tableDefinitionFile)).Decode(&createTableInput); err != nil {
 		return fmt.Errorf("failed to decode table definition JSON: %w", err)
 	}
-	_, err = client.CreateTable(context.Background(), &createTableInput)
+	_, err := client.CreateTable(context.Background(), &createTableInput)
 	return err
 }
 
-func addSwipeToTable(
+func AddSwipeToTable(
 	client *dynamodb.Client,
 	tablename,
 	timestamp,
@@ -102,7 +98,7 @@ func addSwipeToTable(
 	return err
 }
 
-func queryItem(t *testing.T, client *dynamodb.Client, tableName, actorId, recipientId string) (map[string]types.AttributeValue, error) {
+func QueryItem(t *testing.T, client *dynamodb.Client, tableName, actorId, recipientId string) (map[string]types.AttributeValue, error) {
 	t.Helper()
 
 	output, err := client.GetItem(context.Background(), &dynamodb.GetItemInput{
