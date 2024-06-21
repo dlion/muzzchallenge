@@ -94,7 +94,6 @@ func (s *ExplorerServer) LikedYou(ctx context.Context, request *explore.LikedYou
 }
 
 func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *explore.LikedYouRequest) (*dynamodb.ScanOutput, error) {
-
 	queryInput := &dynamodb.ScanInput{
 		TableName:            aws.String(SWIPE_TABLE),
 		ProjectionExpression: aws.String("actor_marriage_profile_id, #like, #likedBack, #timestamp"),
@@ -123,15 +122,15 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 func getExploreProfilesFromLiked(output *dynamodb.ScanOutput, request *explore.LikedYouRequest) []*explore.ExploreProfile {
 	limit := getLimit(request.Limit, len(output.Items))
 
-	var profiles []*explore.ExploreProfile
+	profiles := make([]*explore.ExploreProfile, limit)
 	for i := 0; i < limit; i++ {
 		timestamp, _ := strconv.ParseUint(output.Items[i]["timestamp"].(*types.AttributeValueMemberN).Value, 10, 32)
 		actorMarriageProfileID, _ := strconv.ParseUint(output.Items[i]["actor_marriage_profile_id"].(*types.AttributeValueMemberN).Value, 10, 32)
 
-		profiles = append(profiles, &explore.ExploreProfile{
+		profiles[i] = &explore.ExploreProfile{
 			Timestamp:         uint32(timestamp),
 			MarriageProfileId: uint32(actorMarriageProfileID),
-		})
+		}
 	}
 
 	sort.Slice(profiles, func(i, j int) bool {
