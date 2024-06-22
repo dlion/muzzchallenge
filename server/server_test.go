@@ -142,7 +142,7 @@ func TestServer(t *testing.T) {
 				MarriageProfileId: 2,
 				Gender:            explore.Gender_GENDER_FEMALE,
 				Filter:            explore.LikedYou_LIKED_YOU_NEW,
-			}) // Give me all the female profiles who liked 2 but that didn't get a like back from 2
+			})
 			assert.NoError(t, err)
 			profiles := response.GetProfiles()
 

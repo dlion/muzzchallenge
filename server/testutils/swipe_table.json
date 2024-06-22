@@ -1,20 +1,50 @@
 {
-    "TableName": "Swipe",
-    "KeySchema": [
-      {
-        "AttributeName": "pk_swipe",
-        "KeyType": "HASH"
-      }
-    ],
-    "AttributeDefinitions": [
-      {
-        "AttributeName": "pk_swipe",
-        "AttributeType": "S"
-      }
-    ],
-    "BillingMode": "PROVISIONED",
-    "ProvisionedThroughput": {
-        "ReadCapacityUnits": 10,
-        "WriteCapacityUnits": 5
+  "TableName": "Swipe",
+  "KeySchema": [
+    {
+      "AttributeName": "pk_swipe",
+      "KeyType": "HASH"
     }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "pk_swipe",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "recipient_marriage_profile_id",
+      "AttributeType": "N"
+    },
+    {
+      "AttributeName": "timestamp",
+      "AttributeType": "N"
+    }
+  ],
+  "GlobalSecondaryIndexes": [
+      {
+          "IndexName": "RecipientIndex",
+          "KeySchema": [
+              {
+                  "AttributeName": "recipient_marriage_profile_id",
+                  "KeyType": "HASH"
+              },
+              {
+                  "AttributeName": "timestamp",
+                  "KeyType": "RANGE"
+              }
+          ],
+          "Projection": {
+              "ProjectionType": "ALL"
+          },
+          "ProvisionedThroughput": {
+              "ReadCapacityUnits": 10,
+              "WriteCapacityUnits": 5
+          }
+      }
+  ],
+  "BillingMode": "PROVISIONED",
+  "ProvisionedThroughput": {
+      "ReadCapacityUnits": 10,
+      "WriteCapacityUnits": 5
   }
+}

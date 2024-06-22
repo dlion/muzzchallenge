@@ -93,11 +93,13 @@ func (s *ExplorerServer) LikedYou(ctx context.Context, request *explore.LikedYou
 	return &explore.LikedYouResponse{Profiles: profiles}, nil
 }
 
-func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *explore.LikedYouRequest) (*dynamodb.ScanOutput, error) {
-	queryInput := &dynamodb.ScanInput{
-		TableName:            aws.String(SWIPE_TABLE),
-		ProjectionExpression: aws.String("actor_marriage_profile_id, #like, #likedBack, #timestamp"),
-		FilterExpression:     aws.String("#actor_gender = :actor_gender AND #like = :like AND #likedBack = :likedBack"),
+func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, request *explore.LikedYouRequest) (*dynamodb.QueryOutput, error) {
+	output, err := s.DbClient.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(SWIPE_TABLE),
+		IndexName:              aws.String("RecipientIndex"),
+		KeyConditionExpression: aws.String("recipient_marriage_profile_id = :recipient_marriage_profile_id"),
+		ProjectionExpression:   aws.String("actor_marriage_profile_id, #like, #likedBack, #timestamp"),
+		FilterExpression:       aws.String("#actor_gender = :actor_gender AND #like = :like AND #likedBack = :likedBack"),
 		ExpressionAttributeNames: map[string]string{
 			"#actor_gender": "actor_gender",
 			"#like":         "like",
@@ -105,13 +107,12 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 			"#likedBack":    "likedBack",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":actor_gender": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.Gender.Number())},
-			":like":         &types.AttributeValueMemberBOOL{Value: true},
-			":likedBack":    &types.AttributeValueMemberBOOL{Value: getFilter(request.GetFilter())},
+			":recipient_marriage_profile_id": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.GetMarriageProfileId())},
+			":actor_gender":                  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", request.Gender.Number())},
+			":like":                          &types.AttributeValueMemberBOOL{Value: true},
+			":likedBack":                     &types.AttributeValueMemberBOOL{Value: getFilter(request.GetFilter())},
 		},
-	}
-
-	output, err := s.DbClient.Scan(ctx, queryInput)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("error scanning profiles who liked the profile: %v", err)
 	}
@@ -119,7 +120,7 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 	return output, nil
 }
 
-func getExploreProfilesFromLiked(output *dynamodb.ScanOutput, request *explore.LikedYouRequest) []*explore.ExploreProfile {
+func getExploreProfilesFromLiked(output *dynamodb.QueryOutput, request *explore.LikedYouRequest) []*explore.ExploreProfile {
 	limit := getLimit(request.Limit, len(output.Items))
 
 	profiles := make([]*explore.ExploreProfile, limit)
