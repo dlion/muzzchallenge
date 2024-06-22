@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -112,6 +111,7 @@ func (s *ExplorerServer) getProfilesWhoLikedTheProfile(ctx context.Context, requ
 			":like":                          &types.AttributeValueMemberBOOL{Value: true},
 			":likedBack":                     &types.AttributeValueMemberBOOL{Value: getFilter(request.GetFilter())},
 		},
+		ScanIndexForward: aws.Bool(false),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error scanning profiles who liked the profile: %v", err)
@@ -133,10 +133,6 @@ func getExploreProfilesFromLiked(output *dynamodb.QueryOutput, request *explore.
 			MarriageProfileId: uint32(actorMarriageProfileID),
 		}
 	}
-
-	sort.Slice(profiles, func(i, j int) bool {
-		return profiles[i].Timestamp > profiles[j].Timestamp
-	})
 
 	return profiles
 }
